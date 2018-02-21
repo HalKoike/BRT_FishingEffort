@@ -1,2 +1,3 @@
 # BRT_FishingEffort
-For discussion with Adel and Gareth
+Made for internal discussion with Adel and Gareth
+But any other comments appreciated

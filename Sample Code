@@ -1,7 +1,6 @@
 ## Boosted Regression Tree for FE (Rod and Pole)
 ## 12/14/2017
 
-setwd("C:/Users/ckoikh/Documents/HMRFS/BoostedRegressionFEestimation")
 
 library(gbm)
 library(dismo)
@@ -9,25 +8,8 @@ library(doBy)
 
 source("brt.functions.R")
 
-#Getting the data from the SppCatchComposition folder
-
-#Spp <- read.csv("C:/Users/ckoikh/Documents/HMRFS/SpeciesCatchCompositionPredictors/Spp.csv", header=TRUE)
-Env <- read.csv("C:/Users/ckoikh/Documents/HMRFS/SpeciesCatchCompositionPredictors/Env.csv", header=TRUE)
-FE <- read.csv("C:/Users/ckoikh/Documents/HMRFS/SummaryResults/FEbySite.csv", header=TRUE)
-
-#summing quarter FE data into annual FE *NOTICE THAT YOU ARE GETTING 4DAYS-SUM FROM EACH QUARTER 
-FE.s <- summaryBy(DailyFishingHr + DailyFishingEventCount ~ SiteID + GearType, data=FE, FUN=sum)
-
-#Merging FE and Env
-temp <- merge(FE.s, Env, by.x="SiteID", by.y="SurveySiteID")
-
-#Select out the sites without no SiteID
-temp <- na.omit(temp)
-
-#remove the no variation variables (all 0 data) and Lat Longs
-myvars <- names(temp) %in% c("Latitude","Longitude","X10B..Freshwater.marshes","X10C..Swamps", "X2B..Scarps.and.steep.slopes.in.muddy.sediment", "Aggregated.Patch.Reef", "Individual.Patch.Reef", "Spur.and.Groove") 
-
-temp <- temp[!myvars]
+#Read in the data (Both FE & Env)
+load('DataforDiscussion.RData')
 
 #Selecting the gear type of interest
 Rod <- temp[temp$GearType %in% "RodReel",] #works great with poisson
@@ -42,7 +24,10 @@ HandPole <- temp[temp$GearType %in% "HandPole",]
 ThrowNet <- temp[temp$GearType %in% "ThrowNet",]
 #hist(ThrowNet$DailyFishingHr.sum, breaks=25)
 
-#Fitting a model
+
+#########################################
+###Fitting a model for each gear types
+#########################################
 wd <- Rod
 wd$FE.int <- round(wd$DailyFishingHr.sum,digits=0)
 test.fit.rod <- gbm.step(data=wd, gbm.x=6:37, gbm.y=38, family="poisson", tree.complexity = 3, learning.rate=0.001, bag.fraction=0.5)
@@ -53,33 +38,21 @@ test.fit.thrownet <- gbm.step(data=wd, gbm.x=6:37, gbm.y=3, family="gaussian", t
 wd <- Spear
 test.fit.spear <- gbm.step(data=wd, gbm.x=6:37, gbm.y=3, family="gaussian", tree.complexity = 3, learning.rate=0.001, bag.fraction=0.5)
 
-
-########################################## fitting variations ########################################
-#gaussian (raw value)
-#test.fit <- gbm.step(data=wd, gbm.x=6:37, gbm.y=3, family="gaussian", tree.complexity = 2, learning.rate=0.001, bag.fraction=0.5)
-
-#poisson (rounded value)
-#test.fit <- gbm.step(data=wd, gbm.x=6:37, gbm.y=38, family="poisson", tree.complexity = 3, learning.rate=0.001, bag.fraction=0.5)
-
-#gaussian with fixed tree numbers (1000)
-#test.fit <- gbm.fixed(data=wd, gbm.x=6:37, gbm.y=3, family="gaussian", tree.complexity = 3, learning.rate=0.01, bag.fraction=0.5, n.trees=1000)
-#######################################################################################################
-
-names(test.fit)
-summary(test.fit)
-
-#write.csv(summary(test.fit.rod), "Rod_Summary.csv")
-#write.csv(summary(test.fit.thrownet), "ThrowNet_Summary.csv")
-#write.csv(summary(test.fit.spear), "Spear_Summary.csv")
-
-
+#Notes
 #No tree in Rod (makes tree in poisson) 
 #Spear and thrownet runs fine with gaussian
 #Handpole requres smaller lr or smaller step size, regardless of the distribution
 
-fit.simple <- gbm.simplify(test.fit)
+#####
 
-test.fit.simple <- gbm.step(data=wd, gbm.x=fit.simple$pred.list[[25]], gbm.y=38, family="poisson", tree.complexity = 3, learning.rate = 0.001)
+summary(test.fit.rod)
+summary(test.fit.thrownet)
+summary(test.fit.spear)
+
+
+#Checking if need to drop variables 
+#fit.simple <- gbm.simplify(test.fit.rod)
+#test.fit.simple <- gbm.step(data=wd, gbm.x=fit.simple$pred.list[[25]], gbm.y=38, family="poisson", tree.complexity = 3, learning.rate = 0.001)
 
 
 ##################################
@@ -90,35 +63,28 @@ gbm.plot(test.fit.rod, n.plots = 12, write.title=F)
 
 gbm.plot.fits(test.fit.rod)
 
-#checking for intercactions
-find.int <- gbm.interactions(test.fit)
+#checking for interactions
+find.int <- gbm.interactions(test.fit.rod)
 find.int
 
 
 #########################################################################
 ### Spatial Predicition *make sure to SOURCE THE BRT.FUNCTIONS.R CODE ###
 #########################################################################
-setwd("C:/Users/ckoikh/Documents/HMRFS/BoostedRegressionFEestimation/AsciiOutput")
 
-grid.names <- c("island_ascii.asc", "saltwatermarsh_10a_ascii.asc", "scrubshrubwetland_10d_ascii.asc","exposedrockyshores_1a_ascii.asc", "exposedsolidmanmade_1b_ascii.asc", "exposedwave_2a_ascii.asc", "finetomediumsand_3a_ascii.asc", "coarsegrainedsand_4_ascii.asc", "mixedsandgravel_5_ascii.asc", "gravelbeaches_6a_ascii.asc", "riprap_6b_ascii.asc", "shelteredrocky_8a_ascii.asc", "shelteredmanmade_8b_ascii.asc", "shelteredriprap_ascii.asc", "aggregatereef_ascii.asc", "artificial_ascii.asc", "mud_ascii.asc", "pavement_ascii.asc", "pavementwithsandchannels_ascii.asc", "rockboulder_ascii.asc", "rubble_ascii.asc", "sand_ascii.asc", "scattercoralrock_ascii.asc", "unknown_ascii.asc", "biomassallspp_ascii.asc", "maxslope240_ascii.asc", "depth_ascii.asc", "slopeofslope_ascii.asc", "wavepower_ascii.asc", "percentcoral_ascii.asc", "disttohuman_ascii.asc", "accessibility_ascii.asc" )
+load('preddat.RData')
 
-variable.names <- colnames(wd[c(6:37)]) 
-#here make sure the order is the same as above, if you're using different data
+#Change filepath to where you want the output to be saved
 
-#Reading ASCII files (looking at Ascii values and linking it to the variable names)
-for(i in 1:length(grid.names)){
-  assign(variable.names[i],scan(grid.names[i], skip=6, na.string = "-9999"), pos=1)
-}
+gbm.predict.grids(test.fit.thrownet, preddat, want.grids = T, sp.name = "ThrowNet_all_gaus_na.rm", pred.vec = rep(-9999,1300112), filepath= "C:/Users/ckoikh/Documents/HMRFS/BoostedRegressionFEestimation/", num.col = 1424, num.row = 913, xll = 370941.3513, yll = 2094058.2774, cell.size = 400, no.data = -9999, plot=T) 
 
-preddat <- data.frame (Aggregate.Reef, Artificial, BiomassAllSpp, Island, MaxSlope_240, MaxVar, MeanDepth_m, MeanDistToHuman, MeanPercentCoral, MeanSlopeOfSlope, MeanWavePower, Mud, Pavement, Pavement.with.Sand.Channels, Rock.Boulder, Rubble, Sand, Scattered.Coral.Rock, Unknown, X10A..Salt..and.brackish.water.marshes, X10D..Scrub.shrub.wetlands, X1A..Exposed.rocky.shores, X1B..Exposed..solid.man.made.strutures, X2A..Exposed.wave.cut.platforms.in.bedrock, X3A..Fine..to.medium.grained.sand.beaches, X4..Coarse.grained.sand.beaches, X5..Mixed.sand.and.gravel.beaches, X6A..Gravel.beaches, X6B..Riprap, X8A..Sheltered.rocky.shores, X8B..Sheltered..solid.man.made.structures, X8C..Sheltered.riprap)
+gbm.predict.grids(test.fit.rod, preddat, want.grids = T, sp.name = "Rod_all_Pois_na.rm", pred.vec = rep(-9999,1300112), filepath= "C:/Users/ckoikh/Documents/HMRFS/BoostedRegressionFEestimation/", num.col = 1424, num.row = 913, xll = 370941.3513, yll = 2094058.2774, cell.size = 400, no.data = -9999, plot=T) 
 
-preddat <- preddat[!is.na(Aggregate.Reef),]
-
-gbm.predict.grids(test.fit, preddat, want.grids = T, sp.name = "ThrowNet_all_gaus_na.rm", pred.vec = rep(-9999,1300112), filepath= "C:/Users/ckoikh/Documents/HMRFS/BoostedRegressionFEestimation/", num.col = 1424, num.row = 913, xll = 370941.3513, yll = 2094058.2774, cell.size = 400, no.data = -9999, plot=T) 
-
+gbm.predict.grids(test.fit.spear, preddat, want.grids = T, sp.name = "Spear_all_gaus_na.rm", pred.vec = rep(-9999,1300112), filepath= "C:/Users/ckoikh/Documents/HMRFS/BoostedRegressionFEestimation/", num.col = 1424, num.row = 913, xll = 370941.3513, yll = 2094058.2774, cell.size = 400, no.data = -9999, plot=T) 
 
 ############################################################################33
 #prediction check
+###############################################################################
 
 preds.spear <- predict.gbm(test.fit.spear, preddat, n.trees=test.fit.spear$gbm.call$best.trees, type="response")
 preds.rod <- predict.gbm(test.fit.rod, preddat, n.trees=test.fit.rod$gbm.call$best.trees, type="response")
@@ -129,9 +95,10 @@ sum(preds.spear)*90
 sum(preds.rod)*90
 sum(preds.thrownet)*90
 
-
 #check each association of variables
 plot(test.fit.rod, i='BiomassAllSpp')
 plot(test.fit.rod, i='Pavement')
 plot(test.fit.rod, i='MeanDistToHuman')
 plot(test.fit.rod, i='MaxSlope_240')
+
+
